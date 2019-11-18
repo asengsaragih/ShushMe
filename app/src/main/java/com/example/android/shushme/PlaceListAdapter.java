@@ -23,9 +23,12 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import java.util.ArrayList;
+
 public class PlaceListAdapter extends RecyclerView.Adapter<PlaceListAdapter.PlaceViewHolder> {
 
     private Context mContext;
+    private ArrayList<MyPlace> mData;
 
     /**
      * Constructor using the context and the db cursor
@@ -34,6 +37,7 @@ public class PlaceListAdapter extends RecyclerView.Adapter<PlaceListAdapter.Plac
      */
     public PlaceListAdapter(Context context) {
         this.mContext = context;
+        this.mData = new ArrayList<>();
     }
 
     /**
@@ -59,7 +63,10 @@ public class PlaceListAdapter extends RecyclerView.Adapter<PlaceListAdapter.Plac
      */
     @Override
     public void onBindViewHolder(PlaceViewHolder holder, int position) {
+        MyPlace place = mData.get(position);
 
+        holder.nameTextView.setText(place.getName());
+        holder.addressTextView.setText(place.getAddress());
     }
 
 
@@ -70,7 +77,12 @@ public class PlaceListAdapter extends RecyclerView.Adapter<PlaceListAdapter.Plac
      */
     @Override
     public int getItemCount() {
-        return 0;
+        return mData.size();
+    }
+
+    public void setData(ArrayList<MyPlace> newData) {
+        mData = newData;
+        notifyDataSetChanged();
     }
 
     /**

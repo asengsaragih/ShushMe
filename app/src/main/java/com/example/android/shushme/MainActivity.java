@@ -16,22 +16,38 @@ package com.example.android.shushme;
 * limitations under the License.
 */
 
+import android.content.ContentValues;
 import android.content.Intent;
+import android.database.Cursor;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.Status;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.model.Place;
+import com.google.android.libraries.places.api.net.FetchPlaceRequest;
+import com.google.android.libraries.places.api.net.FetchPlaceResponse;
 import com.google.android.libraries.places.api.net.PlacesClient;
 import com.google.android.libraries.places.widget.Autocomplete;
+import com.google.android.libraries.places.widget.AutocompleteActivity;
 import com.google.android.libraries.places.widget.model.AutocompleteActivityMode;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static com.example.android.shushme.provider.PlaceContract.PlaceEntry.COLUMN_PLACE_ID;
+import static com.example.android.shushme.provider.PlaceContract.PlaceEntry.CONTENT_URI;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -43,6 +59,8 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView mRecyclerView;
 
     private static final int AUTOCOMPLETE_REQUEST_CODE = 10;
+    private PlacesClient mPlacesClient;
+    private ArrayList<MyPlace> mData;
 
     /**
      * Called when the activity is starting
@@ -60,19 +78,23 @@ public class MainActivity extends AppCompatActivity {
         mAdapter = new PlaceListAdapter(this);
         mRecyclerView.setAdapter(mAdapter);
 
+        mData = new ArrayList<>();
+
         // initialize PLACE API KEY
         initAPIKEY();
-
     }
 
     private void initAPIKEY() {
-        String API_KEY = "AIzaSyBcwcvlNZZwDFOjrZfOve_4ROIXi3R4W4M";
+        String API_KEY = "AIzaSyDpHmrVk8xONd21bCkT0SWxzfCGYpbB35A";
         // Initialize the SDK
         Places.initialize(getApplicationContext(), API_KEY);
         // Create a new Places client instance
-        PlacesClient placesClient = Places.createClient(this);
+        mPlacesClient = Places.createClient(this);
+        readData();
     }
 
+
+    //for button get location
     public void addLocation(View view) {
         List<Place.Field> fields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.ADDRESS);
 
@@ -83,5 +105,66 @@ public class MainActivity extends AppCompatActivity {
         startActivityForResult(intent, AUTOCOMPLETE_REQUEST_CODE);
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        if (requestCode == AUTOCOMPLETE_REQUEST_CODE) {
+            if (resultCode == RESULT_OK) {
+                Place place = Autocomplete.getPlaceFromIntent(data);
+                saveData(place.getId());
+                getPlaceDetail(place.getId());
+                Log.i(TAG, "Place: " + place.getName() + ", " + place.getId());
+            } else if (resultCode == AutocompleteActivity.RESULT_ERROR) {
+                // TODO: Handle the error.
+                Status status = Autocomplete.getStatusFromIntent(data);
+                Log.i(TAG, status.getStatusMessage());
+            } else if (resultCode == RESULT_CANCELED) {
+                // The user canceled the operation.
+            }
+        }
+    }
 
+    //save data into sqlite
+    private void saveData(String data) {
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_PLACE_ID, data);
+        getContentResolver().insert(CONTENT_URI, values);
+    }
+
+    private void readData() {
+        Cursor cursor = getContentResolver().query(CONTENT_URI, null , null , null , null);
+        ArrayList<String> id = new ArrayList<>();
+        while (cursor.moveToNext()) {
+            getPlaceDetail(cursor.getString(1));
+        }
+    }
+
+    private void getPlaceDetail(String id) {
+        // Specify the fields to return.
+        List<Place.Field> placeFields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.ADDRESS);
+
+        // Construct a request object, passing the place ID and fields array.
+        FetchPlaceRequest request = FetchPlaceRequest.newInstance(id, placeFields);
+
+        mPlacesClient.fetchPlace(request)
+                .addOnSuccessListener(new OnSuccessListener<FetchPlaceResponse>() {
+                    @Override
+                    public void onSuccess(FetchPlaceResponse fetchPlaceResponse) {
+                        Place place = fetchPlaceResponse.getPlace();
+                        mData.add(new MyPlace(place.getId(), place.getName(), place.getAddress()));
+                        mAdapter.setData(mData);
+                        Log.i(TAG, "Place found: " + place.getAddress());
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        if (e instanceof ApiException) {
+                            ApiException apiException = (ApiException) e;
+                            int statusCode = apiException.getStatusCode();
+                            // Handle error with given status code.
+                            Log.e(TAG, "Place not found: " + e.getMessage());
+                        }
+                    }
+                });
+    }
 }
